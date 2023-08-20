@@ -1,18 +1,57 @@
 (ns postmaster.core
-  (:gen-class) 
-  (:require [postmaster.middleware :as middleware]))
+  (:gen-class)
+  (:require 
+          [ring.adapter.jetty :as ring-jetty]
+          [reitit.ring :as ring]
+          [muuntaja.core :as m]
+          [reitit.coercion.schema]
+          [postmaster.middleware :as middleware]
+          [postmaster.handlers.add :as add]
+          [reitit.ring.coercion :refer [coerce-exceptions-middleware
+                                   coerce-request-middleware
+                                   coerce-response-middleware]]
+     [reitit.ring.middleware.exception :refer [exception-middleware]]
+     [reitit.ring.middleware.muuntaja :refer [format-request-middleware
+                                              format-response-middleware
+                                              format-negotiate-middleware]]))
+   
+
+
+(def users (atom {}))
+
+(defn string-handler [_]
+  {:status 200
+   :body "on the code again"})
+
+
+(defn get-user-by-id [{{:keys [id]} :path-params}]
+  {:status 200
+   :body (get @users id)})
+
+(def app
+  (ring/ring-handler
+   (ring/router
+    ["/" {:middleware [middleware/wrap-jwt-authentication middleware/auth-middleware]}
+     ["add" {:get  add/add-user-header }]
+     ["view" get-user-by-id]
+     ["edit" get-user-by-id]
+     ["delete" get-user-by-id]
+     ["" string-handler]]      {:data {
+                                       :coercion reitit.coercion.schema/coercion
+                                  :muuntaja m/instance
+                                  :middleware [format-negotiate-middleware
+                                               format-response-middleware
+                                               exception-middleware
+                                               format-request-middleware
+                                               coerce-exceptions-middleware
+                                               coerce-request-middleware
+                                               coerce-response-middleware]}})
+    ))
+
+(defn start []
+  (ring-jetty/run-jetty app {:port  3000
+                             :join? false}))
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (println "Im a test"))
-(= 3 3)
-         ( def jwt "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcl9pZCI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.AU-yqLvUOleymW6yIgCUcZyOehVhDS-L-Rg6oenX_LM")
-( def secret-key "142c10a0-2e39-4d96-98e8-905ecc872b87")
-( def jwt-decoded (middleware/verify  jwt secret-key))
-(println jwt-decoded)
-
-
-
-
-
+  (start))
